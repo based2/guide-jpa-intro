@@ -1,0 +1,230 @@
+Index: finish/backendServices/src/main/liberty/config/server.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- finish/backendServices/src/main/liberty/config/server.xml	(revision d3e2b61db3506bc0ef34237e1e67196e147581d9)
++++ finish/backendServices/src/main/liberty/config/server.xml	(date 1556268904048)
+@@ -10,19 +10,25 @@
+   <httpEndpoint httpPort="${default.http.port}" httpsPort="${default.https.port}"
+     id="defaultHttpEndpoint" host="*" />
+ 
+-  <application location="backendServices.war" type="war" context-root="/">
+-  </application>
++  <!-- <application location="backendServices.war" type="war" context-root="/" /> -->
++
++  <webApplication id="backendServices" location="backendServices.war" contextRoot="/" />
+ 
+   <!-- Derby Library Configuration -->    
+-  <library id="derbyJDBCLib">
+-      <fileset dir="${shared.resource.dir}" includes="derby*.jar"/>
++  <library id="h2Library">
++    <!-- <fileset dir="${shared.resource.dir}" includes="derby*.jar"/> -->
++    <fileset dir="${shared.resource.dir}" includes="h2*.jar"/>
+   </library>
+ 
+   <!-- Datasource Configuration -->
+   <dataSource id="eventjpadatasource"
+               jndiName="jdbc/eventjpadatasource">
+-      <jdbcDriver libraryRef="derbyJDBCLib" />
+-      <properties.derby.embedded databaseName="EventDB" createDatabase="create"/>
++      <jdbcDriver libraryRef="h2Library" />
++      <!-- <properties.derby.embedded databaseName="EventDB" createDatabase="create"/> DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;FILE_LOCK=SOCKET; -->
++      <!-- <properties URL="jdbc:h2:mem:mydb;INIT=CREATE SCHEMA IF NOT EXISTS Event" /> -->
++               <!--   user="user" password="password" /> -->
++      <!-- <properties URL="jdbc:h2:./eventsdb;INIT=CREATE SCHEMA IF NOT EXISTS Event" /> -->
++    <properties URL="jdbc:h2:./eventsdb;AUTO_SERVER=true" />
+   </dataSource>
+ 
+ </server>
+Index: finish/backendServices/src/main/java/io/openliberty/guides/event/resources/EventApplication.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- finish/backendServices/src/main/java/io/openliberty/guides/event/resources/EventApplication.java	(revision d3e2b61db3506bc0ef34237e1e67196e147581d9)
++++ finish/backendServices/src/main/java/io/openliberty/guides/event/resources/EventApplication.java	(date 1556269657451)
+@@ -12,10 +12,37 @@
+ // end::copyright[]
+ package io.openliberty.guides.event.resources;
+ 
++import org.h2.tools.Server;
++
+ import javax.ws.rs.ApplicationPath;
+ import javax.ws.rs.core.Application;
++import java.sql.SQLException;
++import java.util.logging.Logger;
+ 
+ @ApplicationPath("/")
+ public class EventApplication extends Application {
+ 
++    private final static Logger LOG = Logger.getLogger(EventApplication.class.getName());
++
++    private static Server h2WebServer = null;
++
++    public EventApplication(){
++        startH2DatabaseExposure();
++    }
++
++    public void startH2DatabaseExposure(){
++        if (h2WebServer == null) {
++            try {
++                h2WebServer = Server.createWebServer("-web", "-webAllowOthers",
++                        /* "-browser", "-trace", ,"-baseDir", */ "-webPort", "8082");
++                h2WebServer.start();
++                LOG.info("H2 Web servers initialized");
++            } catch (SQLException e) {
++                LOG.severe( e.getMessage() );
++                e.printStackTrace();
++            }
++        } else {
++            LOG.info("H2 Web servers already initialized");
++        }
++    }
+ }
+Index: finish/backendServices/pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- finish/backendServices/pom.xml	(revision d3e2b61db3506bc0ef34237e1e67196e147581d9)
++++ finish/backendServices/pom.xml	(date 1556208990414)
+@@ -75,10 +75,15 @@
+             <artifactId>activation</artifactId>
+         </dependency>
+         <!-- https://mvnrepository.com/artifact/org.apache.derby/derby -->
+-        <dependency>
++       <!-- <dependency>
+             <groupId>org.apache.derby</groupId>
+             <artifactId>derby</artifactId>
+             <version>10.14.2.0</version>
++        </dependency> -->
++        <dependency>
++            <groupId>com.h2database</groupId>
++            <artifactId>h2</artifactId>
++            <version>1.4.199</version><!-- 197 stable -->
+         </dependency>
+     </dependencies>
+     <build>
+@@ -89,13 +94,14 @@
+                 <version>2.10</version>
+                 <executions>
+                     <execution>
+-                        <id>copy-derby-dependency</id>
++                        <id>copy-h2-dependency</id>
+                         <phase>package</phase>
+                         <goals>
+                             <goal>copy-dependencies</goal>
+                         </goals>
+                         <configuration>
+-                            <includeArtifactIds>derby</includeArtifactIds>
++                            <!-- <includeArtifactIds>derby</includeArtifactIds> -->
++                            <includeArtifactIds>h2</includeArtifactIds>
+                             <outputDirectory>${project.build.directory}/liberty/wlp/usr/shared/resources/</outputDirectory>
+                         </configuration>
+                     </execution>
+@@ -142,6 +148,7 @@
+                   <default.http.port>${backend.service.http.port}</default.http.port>
+                   <default.https.port>${backend.service.https.port}</default.https.port>
+                   <frontend.port>${frontend.service.http.port}</frontend.port>
++                 <!--  <h2.console.enabled>true</h2.console.enabled> -->
+                 </bootstrapProperties>
+               </configuration>
+               <executions>
+Index: finish/backendServices/src/main/resources/META-INF/persistence.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- finish/backendServices/src/main/resources/META-INF/persistence.xml	(revision d3e2b61db3506bc0ef34237e1e67196e147581d9)
++++ finish/backendServices/src/main/resources/META-INF/persistence.xml	(date 1556212133440)
+@@ -1,14 +1,30 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <persistence version="2.2"
+-    xmlns="http://xmlns.jcp.org/xml/ns/persistence" 
++    xmlns="http://xmlns.jcp.org/xml/ns/persistence"
+     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+-    xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence 
++    xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence
+                         http://xmlns.jcp.org/xml/ns/persistence/persistence_2_2.xsd">
+     <persistence-unit name="jpa-unit" transaction-type="JTA">
+         <jta-data-source>jdbc/eventjpadatasource</jta-data-source>
+         <properties>
++          <!--  <property name="javax.persistence.jdbc.user" value="user" />
++            <property name="javax.persistence.jdbc.password" value="password" />
++                <property name="javax.persistence.jdbc.user" value="sa"/>
++    <property name="javax.persistence.jdbc.password" value=""/>
++            -->
+             <property name="eclipselink.ddl-generation" value="create-tables"/>
+             <property name="eclipselink.ddl-generation.output-mode" value="both" />
++
++            <property name="eclipselink.target-database" value="org.eclipse.persistence.platform.database.H2Platform"/>
++
++            <property name="eclipselink.connection-pool.default.initial" value="2"/>
++            <property name="eclipselink.connection-pool.default.min" value="2"/>
++            <property name="eclipselink.logging.level" value="FINE"/>
++            <property name="eclipselink.logging.thread" value="false"/>
++            <property name="eclipselink.logging.exceptions" value="true"/>
++            <property name="eclipselink.orm.throw.exceptions" value="true"/>
++            <property name="eclipselink.left-join-fetch" value="true"/>
++            <property name="eclipselink.weaving" value="true"/>
+         </properties>
+     </persistence-unit>
+ </persistence>
+\ No newline at end of file
+Index: finish/backendServices/src/main/java/io/openliberty/guides/event/models/Event.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- finish/backendServices/src/main/java/io/openliberty/guides/event/models/Event.java	(revision d3e2b61db3506bc0ef34237e1e67196e147581d9)
++++ finish/backendServices/src/main/java/io/openliberty/guides/event/models/Event.java	(date 1556269798266)
+@@ -29,6 +29,7 @@
+ public class Event implements Serializable {
+     private static final long serialVersionUID = 1L;
+ 
++    // Create sequence
+     @GeneratedValue(strategy = GenerationType.AUTO)
+     @Id
+     @Column(name = "eventId")
+Index: finish/backendServices/src/main/java/io/openliberty/guides/event/resources/EventResource.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- finish/backendServices/src/main/java/io/openliberty/guides/event/resources/EventResource.java	(revision d3e2b61db3506bc0ef34237e1e67196e147581d9)
++++ finish/backendServices/src/main/java/io/openliberty/guides/event/resources/EventResource.java	(date 1556270283571)
+@@ -57,7 +57,7 @@
+                            .entity("Event already exists").build();
+         }
+         eventDAO.createEvent(newEvent);
+-        return Response.status(Response.Status.NO_CONTENT).build(); 
++        return Response.status(Response.Status.NO_CONTENT).build();
+     }
+ 
+     /**
+@@ -85,7 +85,7 @@
+         prevEvent.setTime(time);
+ 
+         eventDAO.updateEvent(prevEvent);
+-        return Response.status(Response.Status.NO_CONTENT).build(); 
++        return Response.status(Response.Status.NO_CONTENT).build();
+     }
+ 
+     /**
+Index: finish/backendServices/src/main/java/io/openliberty/guides/event/dao/EventDao.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- finish/backendServices/src/main/java/io/openliberty/guides/event/dao/EventDao.java	(revision d3e2b61db3506bc0ef34237e1e67196e147581d9)
++++ finish/backendServices/src/main/java/io/openliberty/guides/event/dao/EventDao.java	(date 1556206058942)
+@@ -28,6 +28,8 @@
+ 
+     public void createEvent(Event event) {
+         em.persist(event);
++        em.flush(); // Push to DB
++        em.clear(); // clear JPA cache em
+     }
+ 
+     public Event readEvent(int eventId) {
