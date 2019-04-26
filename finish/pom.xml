@@ -24,6 +24,14 @@
         <frontend.service.http.port>9090</frontend.service.http.port>
         <frontend.service.https.port>9091</frontend.service.https.port>
         <version.exec-maven-plugin>1.6.0</version.exec-maven-plugin>
+        <liberty-maven-plugin.version>2.6.4</liberty-maven-plugin.version>
+        <!-- Open Liberty versions
+        https://openliberty.io/downloads/#runtime_releases
+        https://github.com/OpenLiberty/docs/milestones
+        https://public.dhe.ibm.com/ibmdl/export/pub/software/openliberty/runtime/release/
+        https://github.com/OpenLiberty/open-liberty/releases/
+        -->
+        <open.liberty.runtime.version>19.0.0.3</open.liberty.runtime.version><!-- 19.0.0.4 -->
     </properties>
 
     <!-- Shared dependencies -->
